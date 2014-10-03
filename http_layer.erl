@@ -170,7 +170,6 @@ accept_then_spawn(S) ->
     spawn(?MODULE, worker, [Acs]),
     accept_then_spawn(S).
 
-%% to be continue
 worker(S) ->
     io:format("worker:~p~n", [self()]),
     {ok, Packet} = do_recv(S),
