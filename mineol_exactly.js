@@ -1,12 +1,11 @@
 var gameFlagType = {
-		'before_start': 1,
-		'ing': 2,
-		'over': 4,
-		'fail': 8,
-		'success': 16
+		'before_start': 'before start',
+		'ing': 'gaming',
+		'fail': 'failed',
+		'success': 'success'
 	},
 	backgroundColors = {
-		'normal': 'rgb(159, 216, 248)',
+		'unknown': 'rgb(159, 216, 248)',
 		'mousedown': "black",
 		'mouseup': 'rgb(159, 216, 248)',
 		'probe': 'blue',
@@ -36,9 +35,19 @@ var gameFlagType = {
 	};
 
 // ------------------------------------utils ----------------------------------------
-var getRectIsMine = function (x, y) {
-
+var bindGameFlag = function () {
+	var gameDiv = PARG.$drawTarget.append('<div/>').find(':last');
+	gameDiv.css({
+		left: '800px',
+		top: '800px',
+		'font-size': '-webkit-xxx-large'
+	});
+	return function (flag) {
+		gameFlag = flag;
+		gameDiv[0].innerHTML = '' + flag;
+	};
 };
+bindGameFlag = bindGameFlag();
 var getRectNearbyXY = function(x, y){
 	var temp = [];
 	for(var i=-1;i<2;++i){
@@ -48,10 +57,10 @@ var getRectNearbyXY = function(x, y){
 	}
 	return temp.filter(
 		function (e) {
-			return ((e[0]<0 || e[1]<0)||(e[0] === x && e[1] === y));
+			return !((e[0]<0 || e[1]<0)||(e[0] === x && e[1] === y));
 	});
 };
-
+//debug = getRectNearbyXY;
 var genMineMap = function () {
 	var mineMap = [];
 	for(var i=0;i<ROW*COLUMN;++i){
@@ -134,7 +143,9 @@ var rectUnit = function (x, y, exact_status, mousedownBuffer, mouseupBuffer) {
 		that;
 
 	var $isMine = 4,
+		$isClear = 2,
 		$mousedownBefore = false;
+
 	var recoverFormDown = function () {
 		that.changeBackColor(backgroundColors.mouseup);
 	};
@@ -149,17 +160,127 @@ var rectUnit = function (x, y, exact_status, mousedownBuffer, mouseupBuffer) {
 		}
 		if(status === rectStatus['isMine']){
 			status = rectStatus['unknown'];
-			that.changeBackColor(backgroundColors.normal);
+			that.changeBackColor(backgroundColors.unknown);
 			return;
 		}
 	};
+	var transferAmongFsms = function (nextFsm) {
+		that.it.removeEventListener('mousedown', $fsm.mousedown);
+		that.it.removeEventListener('mouseup', $fsm.mouseup);
+		that.it.removeEventListener('click', $fsm.click);
+		$fsm = nextFsm;
+		that.it.addEventListener('mousedown', $fsm.mousedown);
+		that.it.addEventListener('mouseup', $fsm.mouseup);
+		that.it.addEventListener('click', $fsm.click);
+		that.it.oncontextmenu = $fsm.contextmenu;// 不知为什么这个事件用上面的方法不行
+	};
+
+	var when_unknown = {
+			mousedown: function (e) {
+				if(e.which === 1){
+					//left
+					that.changeBackColor(backgroundColors.mousedown);
+					downBuffer.push(recoverFormDown);
+				}
+				else if(e.which === 3){
+					//right
+				}
+			},
+			mouseup: function (e) {
+
+			},
+			click: function (e) {
+				//貌似click只是指左键
+				if(exactStatus === rectStatus['isMine']){
+					bindGameFlag(gameFlagType.fail);
+//					todo 结束
+				}
+				else if(exactStatus === rectStatus['clear']){
+					status = rectStatus['clear'];
+					that.changeBackColor(backgroundColors.clear);
+					if(mineNumNearby !== 0){
+						that.changeInnerContent(''+mineNumNearby);
+					}
+					else if(mineNumNearby === 0){
+						rectNearby.forEach(function (v) {
+							v.expand();
+						})
+					}
+					transferAmongFsms($fsmChoice.clear);
+				}
+				console.log(mineNumNearby);
+			},
+			contextmenu: function (e) {
+				status = rectStatus['isMine'];
+				that.changeBackColor(backgroundColors.ismine);
+				transferAmongFsms($fsmChoice.ismine);
+				return false;
+			}
+		},
+		when_clear = {
+			mousedown: function (e) {
+//				 扫描周围(视觉部分)
+				rectNearby.forEach(function (v) {
+					v.centerMouseDown();
+				})
+			},
+			mouseup: function (e) {
+
+			},
+			click: function (e) {
+				//---------------todo to be enhanced here------
+				var $temp = rectNearby.filter(function (v) {
+					return v.isMineStatusNotMatch();
+				});
+				if ($temp.length !== 0){
+					bindGameFlag(gameFlagType.fail);
+//					todo game over
+				}
+				//---------------------------------------------
+				if(rectNearby.every(function (v) {
+					return v.isClearEx();
+				})){
+					rectNearby.forEach(function (v) {
+						v.expand();
+					})
+				}
+			},
+			contextmenu: function (e) {
+				return false;
+			}
+		},
+		when_isMine = {
+			mousedown: function (e) {
+
+			},
+			mouseup: function (e) {
+
+			},
+			click: function (e) {
+				
+			},
+			contextmenu: function (e) {
+				status = rectStatus['unknown'];
+				that.changeBackColor(backgroundColors.unknown);
+				transferAmongFsms($fsmChoice.unknown);
+				return false;
+			}
+		},
+		$fsmChoice = {
+			'init': when_unknown,
+			'unknown': when_unknown,
+			'clear': when_clear,
+			'ismine': when_isMine
+		},
+		$fsm = $fsmChoice.init;
+
 	return {
 //		isMine: function () {
 //			return !!(status & $isMine);
 //		},
-//		isClear: function () {
-//			return !(status & $isMine);
-//		},
+		isClear: function () {
+			return (status & $isClear);
+		},
 		isXY: function (tx, ty) {
 			return (tx === x) && (ty === y);
 		},
@@ -167,76 +288,113 @@ var rectUnit = function (x, y, exact_status, mousedownBuffer, mouseupBuffer) {
 			var $rectNearby = [];
 			var $mineNum = 0;
 			for(var i=0;i<rectTable.length;++i){
-				for(var j=0;j<$rectNearbyXY;++j){
+				for(var j=0;j<$rectNearbyXY.length;++j){
 					if(rectTable[i].isXY($rectNearbyXY[j][0], $rectNearbyXY[j][1])){
 						$rectNearby.push(rectTable[i]);
 					}
 				}
 			}
 			rectNearby = $rectNearby;
-			for(var k=0;k<rectNearby;++k){
+//			console.log($rectNearby);
+			for(var k=0;k<rectNearby.length;++k){
 				if(rectNearby[k].isMineEx()){
 					$mineNum++;
 				}
 			}
 			mineNumNearby = $mineNum;
+			console.log($mineNum);
 		},
 		isMineEx: function(){
 			return !!(exactStatus & $isMine);
 		},
 		isClearEx: function(){
-			return !(exactStatus & $isMine);
+			return (exactStatus & $isClear);
+		},
+		isMineStatusNotMatch: function () {
+			return (status === rectStatus['isMine'])&&(exactStatus !== rectStatus['isMine']);
 		},
 		init: function () {
 			$rectNearbyXY = getRectNearbyXY(x, y);
+//			console.log(getRectNearbyXY(1,2));
 			that = drawer();
 			that.draw(x, y);
 
-			that.it.addEventListener('mousedown', function (event) {
-				if (event.which == 1) {
-					console.log('left');
-					that.changeBackColor(backgroundColors.mousedown);
-					downBuffer.push(recoverFormDown);
-					upBuffer.push(recoverFromUp);
-				}
-				if (event.which == 3){
-					console.log('right');
-//					return false;
-				}
-			});
-			that.it.addEventListener('mouseup', function (event) {
-				if(event.which == 1) {
-					//left
-					if($mousedownBefore) {
-						do_probe();
-					}
-					$mousedownBefore = false;
-				}
-			}, true);
-			that.it.oncontextmenu = function (event) {
-				reverseBetweenMineAndUnknown();
-				return false;
-			};
-			that.it.addEventListener('click', function (event) {
-				if(event.which == 1) {
-					//left
-					switch (status) {
-						case rectStatus['unknown']:
-
-					}
-				}
+			that.it.addEventListener('mousedown', $fsm.mousedown);
+			that.it.addEventListener('mouseup', $fsm.mouseup);
+			that.it.addEventListener('click', $fsm.click);
+			that.it.oncontextmenu = $fsm.contextmenu;
+//			that.it.addEventListener('mousedown', function (event) {
+//				if (event.which == 1) {
+//					console.log('left');
+//					if(status !== rectStatus['isMine']) {
+//						that.changeBackColor(backgroundColors.mousedown);
+//						downBuffer.push(recoverFormDown);
+//						upBuffer.push(recoverFromUp);
+//					}
+//				}
+//				if (event.which == 3){
+//					console.log('right');
+////					return false;
+//				}
+//			});
+//			that.it.addEventListener('mouseup', function (event) {
+//				if(event.which == 1) {
+//					//left
+//					if($mousedownBefore) {
+//						do_probe();
+//					}
+//					$mousedownBefore = false;
+//				}
+//			}, true);
+//			that.it.oncontextmenu = function (event) {
+//				reverseBetweenMineAndUnknown();
+//				return false;
+//			};
+//			that.it.addEventListener('click', function (event) {
+//				if(event.which == 1) {
+//					//left
+////					console.log(rectNearby);
+//					switch (status) {
+//						case rectStatus['unknown']:
+//
+//					}
+//				}
 //				if(event.which == 3){
 //				else{
 //					//right
 //					reverseBetweenMineAndUnknown();
 //				}
-			})
+//			})
 		},
-		centerMouseDown: function (successOne) {
+		centerMouseDown: function () {
 			if(status === rectStatus['unknown']) {
 				that.changeBackColor(backgroundColors.mousedown);
-				downBuffer.push();
+				downBuffer.push(recoverFormDown);
 			}
+		},
+		expand: function () {
+			var $temp;
+			status = rectStatus['clear'];
+			that.changeBackColor(backgroundColors.clear);
+			if(mineNumNearby !== 0){
+				that.changeInnerContent(''+mineNumNearby);
+			}
+			transferAmongFsms($fsmChoice.clear);
+			if(mineNumNearby === 0) {
+				$temp = rectNearby.filter(function (v) {
+					return !(v.isClear());
+				});
+				$temp.forEach(function (v) {
+					v.expand();
+				});
+			}
+		},
+		successConfig: function () {
+//			todo test needed
+			status = exactStatus;
+			var $temp = status == 'isMine'?'ismine':status;
+			that.changeBackColor(backgroundColors[$temp]);
+			transferAmongFsms($fsmChoice[$temp]);
 		},
 		destory: function(){
 			that.destroy();
@@ -316,8 +474,8 @@ var rectsManager = function () {
 };
 
 var game = function () {
-	gameFlag = gameFlagType['before_start'];
+	bindGameFlag(gameFlagType['before_start']);
 	rects = rectsManager();
 	rects.start();
-	gameFlag = gameFlagType['ing']
+	bindGameFlag(gameFlagType['ing']);
 }();
