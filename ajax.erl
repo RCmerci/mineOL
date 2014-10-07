@@ -4,31 +4,23 @@
 %%% @doc
 %%%
 %%% @end
-%%% Created :  3 Oct 2014 by rcmerci <rcmerci@562837353@qq.com>
+%%% Created :  7 Oct 2014 by rcmerci <rcmerci@562837353@qq.com>
 %%%-------------------------------------------------------------------
--module(http_layer).
+-module(ajax).
 
 -behaviour(gen_server).
 
--import(ajax, [post_ajax_call/2]).
 %% API
--export([start_link/1,
-         start_link/0,
-         start_http/0]).
+-export([start_link/0, post_ajax_call/2]).
 
 %% gen_server callbacks
 -export([init/1, handle_call/3, handle_cast/2, handle_info/2,
          terminate/2, code_change/3]).
 
-%% test export
--export([get_uri/1,get_uri/3,test/1, fetch/1]).
+-define(SERVER, ?MODULE).
 
-
-%% spawn export
--export([worker/1, accept_then_spawn/1]).
 -record(state, {}).
--define(PORT, 8414).
--define(SERVER, default).
+
 %%%===================================================================
 %%% API
 %%%===================================================================
@@ -40,22 +32,12 @@
 %% @spec start_link() -> {ok, Pid} | ignore | {error, Error}
 %% @end
 %%--------------------------------------------------------------------
-start_link(ServerName) when is_list(ServerName)->
-    lists:map(fun(E)->gen_server:start_link({local, E}, ?MODULE, [], []) end, [?SERVER|ServerName]);
-start_link(ServerName) ->
-    gen_server:start_link({local, ServerName}, ?MODULE, [], []).
-start_link()->
+start_link() ->
     gen_server:start_link({local, ?SERVER}, ?MODULE, [], []).
 
-test(Server) ->
-    gen_server:call(Server, {test}).
-
--spec static_file(Uri)-> Reply when
-      Uri::string(), Reply::any().
-static_file(Uri) ->
-    gen_server:call(?SERVER, {uri, Uri}).
-
-
+%% Packet::binary()
+post_ajax_call(S, Packet) ->
+    gen_server:call(?SERVER, {ajax, {S, Packet}}).
 
 %%%===================================================================
 %%% gen_server callbacks
@@ -89,13 +71,16 @@ init([]) ->
 %%                                   {stop, Reason, State}
 %% @end
 %%--------------------------------------------------------------------
-handle_call({uri, URI}, _From, State) ->
-    {reply, fetch(URI), State};
-handle_call({websocket, _URI}=Request, _From, State) ->
-    {reply, Request, State};
-handle_call(Request, From, State) ->
-    timer:sleep(1000),
-    Reply = {Request, From},
+handle_call({ajax, {S, Packet}}, _From, State) ->
+    HeadAndBody = binary:split(Packet, [<<"\r\n\r\n">>]),
+    [_Heads, PostContent] = HeadAndBody,
+    PostList = binary:split(PostContent, [<<"&">>], [global]),
+    PostList2 = [list_to_tuple(binary:split(T, [<<"=">>])) || T<-PostList],
+    Reply = lists:map(handle_ajax(S), PostList2),
+    io:format("reply:~p~n", [Reply]),
+    {reply, Reply, State};
+handle_call(_Request, _From, State) ->
+    Reply = ok,
     {reply, Reply, State}.
 
 %%--------------------------------------------------------------------
@@ -152,102 +137,15 @@ code_change(_OldVsn, State, _Extra) ->
 %%%===================================================================
 %%% Internal functions
 %%%===================================================================
--record(e404, {head = <<"HTTP/1.1 404 Not Found\r\nServer: holy fucking shit\r\n\r\n">>}).
--record(normal, {head = <<"HTTP/1.1 200 OK\r\nServer: holy fucking shit\r\n\r\n">>}).
 
-
-start_http() ->
-    {ok, Ls} = open_port(),
-    start_link(),
-    ajax:start_link(),
-    spawn_link(?MODULE, accept_then_spawn, [Ls]).
-
-open_port() ->
-    open_port(?PORT).
-open_port(Port) ->
-    gen_tcp:listen(Port, [binary, {packet, 0}, {active, false}]).
-
-accept_then_spawn(S) ->
-    {ok, Acs} = gen_tcp:accept(S),
-    spawn(?MODULE, worker, [Acs]),
-    accept_then_spawn(S).
-
-ret_static_file(S, Uri) ->
-    RetContent = case static_file(Uri) of
-                     {ok, File}->
-                         T = #normal{},
-                         [T#normal.head, File];
-                     {error, _} ->
-                         T = #e404{},
-                         [T#e404.head];
-                     Else ->
-                         io:format("error at ~p:~p~n", [?LINE, Else])
-                 end,
-    sendback(S, RetContent).
-
-
-worker(S) ->
-    io:format("worker:~p~n", [self()]),
-    {ok, Packet} = do_recv(S),
-    {ok, Uri} = get_uri(Packet),
-    try lists:nth(2,binary:split(list_to_binary(Uri), [<<"/">>], [global])) of % /ajax/something
-        T when T== <<"ajax">> ->
-            Temp = #normal{},
-            R = post_ajax_call(S, Packet),
-            sendback(S, [Temp#normal.head | R]);
-        Other ->
-            io:format("~p~n", [Other]),
-            ret_static_file(S, Uri)
-    catch
-        error:_ ->
-            ret_static_file(S, Uri)
+handle_ajax(S) ->
+    fun(Tuple) ->
+            handle_ajax(S, Tuple)
     end.
 
-do_recv(S) ->
-    case gen_tcp:recv(S, 0) of
-        {ok, Packet} ->
-            {ok, Packet};
-        {error, closed} ->
-            {error, closed};
-        {error, Reason} ->
-            {error, Reason}
-    end.
-
-%% get uri for binary ,such as <<"GET /s/d HTTP/1.1">> -> "/s/d"
--spec get_uri(Packet)->{ok, Uri}|{error, nouri} when
-      Packet::binary(), Uri::string().
-get_uri(Packet) ->
-    get_uri(binary_to_list(Packet), [], notstart).
-
-get_uri([$P, $O, $S, $T,$\s|S], SoFar, notstart) ->
-    get_uri(S, SoFar, started);
-get_uri([$G, $E, $T, $\s|S], SoFar, notstart) ->
-    get_uri(S, SoFar, started);
-get_uri([_H|S], SoFar, notstart) ->
-    get_uri(S, SoFar, notstart);
-get_uri(_S, [$1, $., $1, $/, $P, $T, $T, $H, $\s|SoFar], started) ->
-    {ok, lists:reverse(SoFar)};
-get_uri([H|S], SoFar, started) ->
-    get_uri(S, [H|SoFar], started);
-get_uri([], _SoFar, _) ->
-    {error, nouri}.
-
--spec sendback(_S, Content)->term() when
-      Content::list().
-sendback(S, Content) ->
-    lists:foreach(fun(A)->gen_tcp:send(S, A) end, Content),
-    inet:close(S).
-
-%% get static file return as binary
--spec fetch(Uri)->{ok, File}|{error, _Reason} when
-      Uri::string(), File::binary().
-fetch(Uri) ->
-    [$/|TakeOffPreFix] = Uri,
-    file:read_file(TakeOffPreFix).
-
-
-
-%% http response shortcut
-httpresponse(S, e404) ->
-    T = #e404{},
-    sendback(S, [T#e404.head]).
+handle_ajax(_S, {<<"mineHasFound">>, BinValue}) ->
+    io:format("minehasfound:~p~n", [BinValue]),
+    <<"ok">>;
+handle_ajax(_S, _Tuple) ->
+    io:format("default:nosense"),
+    <<"nosense">>.
