@@ -18,8 +18,10 @@
          terminate/2, code_change/3]).
 
 -define(SERVER, ?MODULE).
-
--record(state, {}).
+%% ets:rectTable:{id,mineNumberFound,details}
+%% @details:具体的分布
+%% @id:just id for config
+-record(state, {rectTable}).
 
 %%%===================================================================
 %%% API
@@ -55,7 +57,8 @@ post_ajax_call(S, Packet) ->
 %% @end
 %%--------------------------------------------------------------------
 init([]) ->
-    {ok, #state{}}.
+    Tid = ets:new(rectTable, [public, {keypos, 1}]),
+    {ok, #state{rectTable = Tid}}.
 
 %%--------------------------------------------------------------------
 %% @private
@@ -76,7 +79,8 @@ handle_call({ajax, {S, Packet}}, _From, State) ->
     [_Heads, PostContent] = HeadAndBody,
     PostList = binary:split(PostContent, [<<"&">>], [global]),
     PostList2 = [list_to_tuple(binary:split(T, [<<"=">>])) || T<-PostList],
-    Reply = lists:map(handle_ajax(S), PostList2),
+    {_, Id} = lists:keyfind(<<"id">>, 1, PostList2),
+    Reply = lists:map(handle_ajax(S, State, Id), PostList2),
     io:format("reply:~p~n", [Reply]),
     {reply, Reply, State};
 handle_call(_Request, _From, State) ->
@@ -138,14 +142,42 @@ code_change(_OldVsn, State, _Extra) ->
 %%% Internal functions
 %%%===================================================================
 
-handle_ajax(S) ->
+handle_ajax(S, State, Id) ->
     fun(Tuple) ->
-            handle_ajax(S, Tuple)
+            handle_ajax(S, State, Id, Tuple)
     end.
 
-handle_ajax(_S, {<<"mineHasFound">>, BinValue}) ->
+handle_ajax(_S, State, Id, {<<"mineHasFound">>, BinValue}) ->
     io:format("minehasfound:~p~n", [BinValue]),
-    <<"ok">>;
-handle_ajax(_S, _Tuple) ->
-    io:format("default:nosense"),
+    case ets:update_element(State#state.rectTable, Id, {2, BinValue}) of
+        true ->
+            <<"ok">>;
+        false ->
+            ets:insert(State#state.rectTable, {Id, BinValue, undefined})
+    end,
+
+handle_ajax(_S, State, Id, {Bk, Bv}) ->
+    io:format("default:~p~p~n", [Bk, Bv]),
     <<"nosense">>.
+
+
+get_other_info(Id, State) ->
+    case ets:first(State#state.rectTable) of
+        First when First == Id ->
+            get_other_info(First, [], [], State);
+        _Other ->
+            [Rf] = ets:lookup(State#state.rectTable, Id),
+            get_other_info(First, [Id], [Rf], State)
+    end.
+
+get_other_info(Prev, Except, SoFar, State)->
+    pass;
+get_other_info(Prev, [], SoFar, State) ->
+    case ets:next(State#state.rectTable, Prev) of
+        '$end_of_table' ->
+            SoFar;
+        K ->
+            [R] = ets:lookup(State#state.rectTable, K),
+            get_other_info(K, [], [R|SoFar], State)
+    end;
+get_other_info() ->
