@@ -10,6 +10,7 @@
 
 -behaviour(gen_server).
 
+-import(ajax, [ajax_call/2]).
 %% API
 -export([start_link/1,
          start_link/0,
@@ -170,10 +171,7 @@ accept_then_spawn(S) ->
     spawn(?MODULE, worker, [Acs]),
     accept_then_spawn(S).
 
-worker(S) ->
-    io:format("worker:~p~n", [self()]),
-    {ok, Packet} = do_recv(S),
-    {ok, Uri} = get_uri(Packet),
+ret_static_file(S, Uri) ->
     RetContent = case static_file(Uri) of
                      {ok, File}->
                          T = #normal{},
@@ -186,6 +184,22 @@ worker(S) ->
                  end,
     sendback(S, RetContent).
 
+
+worker(S) ->
+    io:format("worker:~p~n", [self()]),
+    {ok, Packet} = do_recv(S),
+    {ok, Uri} = get_uri(Packet),
+    try lists:nth(2,binary:split(list_to_binary(Uri), [<<"/">>], [global])) of % /ajax/something
+        T when T== <<"ajax">> ->
+            Temp = #normal{},
+            R = ajax_call(S, Packet),
+            sendback(S, [Temp#normal.head, R]);
+        _Other ->
+            ret_static_file(S, Uri)
+    catch
+        error:_ ->
+            ret_static_file(S, Uri)
+    end.
 
 do_recv(S) ->
     case gen_tcp:recv(S, 0) of

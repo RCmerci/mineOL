@@ -1,6 +1,6 @@
 <!DOCTYPE html>
 <html>
-<script src="http://apps.bdimg.com/libs/jquery/2.1.1/jquery.min.js"></script>
+<script src="/jq.js"></script>
 <style type="text/css">
     #draw-target{
         width: 480px;
@@ -13,6 +13,12 @@
 </head>
 <body>
 <div id="draw-target"></div>
+<button id="restart">restart</button>
+<script>
+    $('#restart').click(function (e) {
+        console.log(e.which);
+    });
+</script>
 </body>
 <script src="/mineol_exactly.js"></script>
 
