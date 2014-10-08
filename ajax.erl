@@ -16,7 +16,8 @@
 %% gen_server callbacks
 -export([init/1, handle_call/3, handle_cast/2, handle_info/2,
          terminate/2, code_change/3]).
-
+%% for test
+-export([quote/2, unquote/2, ets_info/0]).
 -define(SERVER, ?MODULE).
 %% ets:rectTable:{id,mineNumberFound,details}
 %% @details:具体的分布
@@ -40,6 +41,9 @@ start_link() ->
 %% Packet::binary()
 post_ajax_call(S, Packet) ->
     gen_server:call(?SERVER, {ajax, {S, Packet}}).
+
+ets_info() ->
+    gen_server:call(?SERVER, {ets_info}).
 
 %%%===================================================================
 %%% gen_server callbacks
@@ -83,6 +87,15 @@ handle_call({ajax, {S, Packet}}, _From, State) ->
     Reply = lists:map(handle_ajax(S, State, Id), PostList2),
     io:format("reply:~p~n", [Reply]),
     {reply, Reply, State};
+handle_call({ets_info}, _From, State) ->
+    R = case ets:first(State#state.rectTable) of
+            '$end_of_table' ->
+                [];
+            K ->
+                [V] = ets:lookup(State#state.rectTable, K),
+                [V | get_ets_info(State, K)]
+        end,
+    {reply, R, State};
 handle_call(_Request, _From, State) ->
     Reply = ok,
     {reply, Reply, State}.
@@ -148,14 +161,22 @@ handle_ajax(S, State, Id) ->
     end.
 
 handle_ajax(_S, State, Id, {<<"mineHasFound">>, BinValue}) ->
-    io:format("minehasfound:~p~n", [BinValue]),
+    io:format("minehasfound:mineHasFound:~p,~p~n", [Id, BinValue]),
     update_rectTable(State, Id, {2, BinValue}),
     OtherInfo = get_other_info(Id, State),
-
+    format_info(OtherInfo);
 handle_ajax(_S, State, Id, {<<"rectTable">>, BinValue}) ->
-    io:format("rectTable:~p~n", [BinValue]),
-    update_rectTable(State, Id, {3, BinValue});
-handle_ajax(_S, State, Id, {Bk, Bv}) ->
+    io:format("rectTable:Id:~p,~p~n", [Id, BinValue]),
+    update_rectTable(State, Id, {3, BinValue}),
+    OtherInfo = get_other_info(Id, State),
+    format_info(OtherInfo);
+handle_ajax(_S, State, Id, {<<"willLeave">>, BinValue}) ->
+    io:format("willLeave:Id:~p,~p~n", [Id, BinValue]),
+    update_rectTable(State, Id, {willLeave, true}),
+    <<"ok">>;
+handle_ajax(_S, _State, _Id, {<<"id">>, _}) ->
+    <<>>;
+handle_ajax(_S, _State, _Id, {Bk, Bv}) ->
     io:format("default:~p~p~n", [Bk, Bv]),
     <<"nosense">>.
 
@@ -167,7 +188,7 @@ get_other_info(Id, State) ->
         First when First == Id ->
             get_other_info(First, [], [], State);
         First ->
-            [Rf] = ets:lookup(State#state.rectTable, Id),
+            [Rf] = ets:lookup(State#state.rectTable, First),
             get_other_info(First, [Id], [Rf], State)
     end.
 
@@ -194,19 +215,31 @@ get_other_info(Prev, [], SoFar, State) ->
 update_rectTable(State, Id, {2, BinValue}) ->
     case ets:update_element(State#state.rectTable, Id, {2, BinValue}) of
         true ->
-            <<"ok">>;
+            true;
         false ->
-            ets:insert(State#state.rectTable, {Id, BinValue, undefined})
+            ets:insert(State#state.rectTable, {Id, BinValue, <<"undefined">>})
     end,
     ok;
 update_rectTable(State, Id, {3, BinValue}) ->
     case ets:update_element(State#state.rectTable, Id, {3, BinValue}) of
         true ->
-            <<"ok">>;
+            true;
         false ->
-            ets:insert(State#state.rectTable, {Id, undefined, BinValue})
+            ets:insert(State#state.rectTable, {Id, <<"undefined">>, BinValue})
     end,
+    ok;
+update_rectTable(State, Id, {willLeave, true}) ->
+    ets:delete(State#state.rectTable, Id),
     ok.
+
+format_info(Info) ->
+    list_to_binary(
+      lists:map(fun({Id, MineFound, Detail})->
+                        list_to_binary("id:" ++ binary_to_list(Id) ++
+                                           "mineHasFound:" ++ binary_to_list(MineFound) ++
+                                           "rectTable:" ++ binary_to_list(Detail))
+                end, Info)).
+
 
 -spec quote(C, SoFar)->list() when
       C::list(), SoFar::list().
@@ -259,4 +292,17 @@ unquote([$%, $2, $C | R], SoFar) ->
     unquote(R, [$, | SoFar]);
 unquote([$%, $2, $F | R], SoFar) ->
     unquote(R, [$/ | SoFar]);
-unquote() ->
+unquote([H|R], SoFar) ->
+    unquote(R, [H|SoFar]);
+unquote([], SoFar) ->
+    SoFar.
+
+
+get_ets_info(State, Prev) ->
+    case ets:next(State#state.rectTable, Prev) of
+        '$end_of_table' ->
+            [];
+        K ->
+            [V] = ets:lookup(State#state.rectTable, K),
+            [V | get_ets_info(State, K)]
+    end.

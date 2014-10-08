@@ -3,11 +3,25 @@ $(document).ready(function () {
 //	var mineHasFound = MINEHASFOUND;
 //	var rectTable = RECTTABLE;
 
-	var refreshInterval = 0.5,
-		token;
+	var refreshInterval = 0.5;
+		token=0;
 
 	var $temp = new Date();
 	token = $temp.getTime(); // use for config which one it is
+
+	window.onbeforeunload = function () {
+		$.ajax({
+			type: 'POST',
+			url: '/ajax/',
+			data: {id: token, willLeave: true},
+			success: function (response) {
+				;
+			},
+			async: false,
+			dataType: 'text'
+		});
+		return "asdads";
+	};
 
 	(function ajaxFunc() {
 		$.ajax({
