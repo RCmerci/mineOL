@@ -2,9 +2,25 @@
 <html>
 <script src="/jq.js"></script>
 <style type="text/css">
+    body{
+        font-family: monospace;
+    }
     #draw-target{
         width: 480px;
         background-image: url(mineol.png);
+        top: 0px;
+        left: 367px;
+        position: relative;
+    }
+    #p1{
+        top: 50px;
+        left: 10px;
+        position: relative;
+    }
+    #p2{
+        top: 250px;
+        left: 10px;
+        position: relative;
     }
 </style>
 <head lang="en">
@@ -13,12 +29,13 @@
 </head>
 <body>
 <div id="draw-target"></div>
+<div id="p1">
+    <div class="percent"></div>%
+</div>
+<div id="p2">
+    <div class="percent"></div>%
+</div>
 <button id="restart">restart</button>
-<script>
-    $('#restart').click(function (e) {
-        console.log(e.which);
-    });
-</script>
 </body>
 <script src="/mineol_exactly.js"></script>
 <script src="/ajax.js"></script>

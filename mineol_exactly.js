@@ -4,6 +4,8 @@
 MINENUMBER = 0;
 MINEHASFOUND = 0;
 RECTTABLE = [];
+P1 = 0;//随便写个0
+P2 = 0;
 //-------------------------------
 	var gameFlagType = {
 			'before_start': 'before start',
@@ -45,9 +47,11 @@ RECTTABLE = [];
 	var bindGameFlag = function () {
 		var gameDiv = PARG.$drawTarget.append('<div/>').find(':last');
 		gameDiv.css({
-			left: '800px',
-			top: '800px',
-			'font-size': '-webkit-xxx-large'
+			left: '-350px',
+//			top: '800px',
+			'font-size': '-webkit-xxx-large',
+			'font-family': 'monospace',
+			position: 'relative'
 		});
 		return function (flag) {
 			gameFlag = flag;
@@ -105,21 +109,19 @@ RECTTABLE = [];
 //})();
 
 
-	var drawer = function (sideLength) {
-		var parg = PARG,
+	var drawer = function (sideLength, person) {
+		var parg = person || PARG,
 			slx = (sideLength && sideLength.x) || default_side_lengthX,
 			sly = (sideLength && sideLength.y) || default_side_lengthY,
-			startX = MainStartX,
-			startY = MainStartY,
-			width = slx,
-			height = sly,
+//			startX = MainStartX,
+//			startY = MainStartY,
 			image = parg.images,
 			elem = parg.$drawTarget.append("<div/>").find(":last"),
 			$elemStyle = elem[0].style;
 		elem.css({
 			position: 'absolute', left: -9999, /*********************/
-			width: width,
-			height: height,
+			width: slx,
+			height: sly,
 //		backgroundImage: 'url(' + images + ')'
 			backgroundColor: 'rgb(159, 216, 248)', // init color
 			border: '2px solid rgb(211, 132, 31)'
@@ -127,8 +129,10 @@ RECTTABLE = [];
 		return {
 			it: elem[0],
 			draw: function (x, y) {
-				$elemStyle.left = startX + x * slx + 'px';
-				$elemStyle.top = startY + y * sly + 'px';
+//				$elemStyle.left = startX + x * slx + 'px';
+//				$elemStyle.top = startY + y * sly + 'px';
+				$elemStyle.left = x * slx + 'px';
+				$elemStyle.top = y * sly + 'px';
 			},
 			changeBackColor: function (cssStr) {
 				$elemStyle.backgroundColor = cssStr;
@@ -143,15 +147,24 @@ RECTTABLE = [];
 		};
 	};
 
+	var simpleRectUnit = function (x, y, status) {
+		return {
+			init: function () {
 
+			}
+		};	
+	};
 	var rectUnit = function (x, y, exact_status, mousedownBuffer, mouseupBuffer) {
 		var exactStatus = exact_status,
 			status = rectStatus['unknown'],
 			$rectNearbyXY = [],
 			rectNearby = [],
 			mineNumNearby = 0,
-			downBuffer = mousedownBuffer(),
-			upBuffer = mouseupBuffer(),
+			downBuffer = (mousedownBuffer && mousedownBuffer()) || 
+				(function () {
+					return {push: function(){}}
+				})(),
+			upBuffer = (mouseupBuffer && mouseupBuffer()) || (function () {}),
 			that;
 
 		var $isMine = 4,
@@ -455,7 +468,7 @@ RECTTABLE = [];
 		var do_for_start = function () {
 			//----------------------generate mine map randomly
 			var genMineMapFunc = genMineMap();
-			for (var i = 0; i < COLUMN; ++i) {
+			for (var i = 0;i < COLUMN; ++i) {
 				for (var j = 0; j < ROW; ++j) {
 					var $status = genMineMapFunc(),
 						aRectUnit = rectUnit(i, j, $status, downCover, upCover);
@@ -473,12 +486,6 @@ RECTTABLE = [];
 			//--------------------------------------------------------------
 		};
 		rectTable.destory = function () {
-//		for(var i in rectTable){
-//			if(rectTable.hasOwnProperty(i)){
-//				console.log(i);
-//				rectTable[i].destory();
-//			}
-//		}
 			for (var i = 0; i < rectTable.length; ++i) {
 				rectTable[i].destory();
 			}
@@ -489,7 +496,7 @@ RECTTABLE = [];
 				rectTable.destory();
 				do_for_start();
 				bindGameFlag(gameFlagType['ing']);
-
+				MINEHASFOUND = 0;
 			},
 			start: function () {
 				do_for_start();
@@ -500,6 +507,19 @@ RECTTABLE = [];
 			},
 			getRectTable: function () {
 				return rectTable;
+			}
+		};
+	};
+	var connectManager = function () {
+		var rectTable = [];
+		return {
+			draw_blank: function () {
+				for(var i=0;i<COLUMN;++i){
+					for(var j=0;j<ROW;++j){
+						var anRect = rectUnit(i, j, rectStatus['unknown']);
+						rectTable.push(anRect);
+					}
+				}
 			}
 		};
 	};
@@ -515,5 +535,8 @@ RECTTABLE = [];
 		MINENUMBER = MINENUM;
 		RECTTABLE = rects.getRectTable();
 //		---------------------------------
+//		------------------初始化显示百分比的代码
+
+//		------------------------------------
 	}();
 })();
