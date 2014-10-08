@@ -149,13 +149,12 @@ handle_ajax(S, State, Id) ->
 
 handle_ajax(_S, State, Id, {<<"mineHasFound">>, BinValue}) ->
     io:format("minehasfound:~p~n", [BinValue]),
-    case ets:update_element(State#state.rectTable, Id, {2, BinValue}) of
-        true ->
-            <<"ok">>;
-        false ->
-            ets:insert(State#state.rectTable, {Id, BinValue, undefined})
-    end,
+    update_rectTable(State, Id, {2, BinValue}),
+    OtherInfo = get_other_info(Id, State),
 
+handle_ajax(_S, State, Id, {<<"rectTable">>, BinValue}) ->
+    io:format("rectTable:~p~n", [BinValue]),
+    update_rectTable(State, Id, {3, BinValue});
 handle_ajax(_S, State, Id, {Bk, Bv}) ->
     io:format("default:~p~p~n", [Bk, Bv]),
     <<"nosense">>.
@@ -163,15 +162,25 @@ handle_ajax(_S, State, Id, {Bk, Bv}) ->
 
 get_other_info(Id, State) ->
     case ets:first(State#state.rectTable) of
+        '$end_of_table' ->
+            [];
         First when First == Id ->
             get_other_info(First, [], [], State);
-        _Other ->
+        First ->
             [Rf] = ets:lookup(State#state.rectTable, Id),
             get_other_info(First, [Id], [Rf], State)
     end.
 
-get_other_info(Prev, Except, SoFar, State)->
-    pass;
+get_other_info(Prev, [Except], SoFar, State)->
+    case ets:next(State#state.rectTable, Prev) of
+        Except ->
+            get_other_info(Except, [], SoFar, State);
+        '$end_of_table' ->
+            SoFar;
+        OtherK ->
+            [R] = ets:lookup(State#state.rectTable, OtherK),
+            get_other_info(OtherK, [Except], [R|SoFar], State)
+    end;
 get_other_info(Prev, [], SoFar, State) ->
     case ets:next(State#state.rectTable, Prev) of
         '$end_of_table' ->
@@ -179,5 +188,75 @@ get_other_info(Prev, [], SoFar, State) ->
         K ->
             [R] = ets:lookup(State#state.rectTable, K),
             get_other_info(K, [], [R|SoFar], State)
-    end;
-get_other_info() ->
+    end.
+
+
+update_rectTable(State, Id, {2, BinValue}) ->
+    case ets:update_element(State#state.rectTable, Id, {2, BinValue}) of
+        true ->
+            <<"ok">>;
+        false ->
+            ets:insert(State#state.rectTable, {Id, BinValue, undefined})
+    end,
+    ok;
+update_rectTable(State, Id, {3, BinValue}) ->
+    case ets:update_element(State#state.rectTable, Id, {3, BinValue}) of
+        true ->
+            <<"ok">>;
+        false ->
+            ets:insert(State#state.rectTable, {Id, undefined, BinValue})
+    end,
+    ok.
+
+-spec quote(C, SoFar)->list() when
+      C::list(), SoFar::list().
+quote([$;|R], SoFar) ->
+    quote(R, [$B, $3, $% | SoFar]);
+quote([$\s|R], SoFar) ->
+    quote(R, [$0, $2, $% | SoFar]);
+quote([$?|R], SoFar) ->
+    quote(R, [$F, $3, $% | SoFar]);
+quote([$:|R], SoFar) ->
+    quote(R, [$A, $3, $% | SoFar]);
+quote([$@|R], SoFar) ->
+    quote(R, [$0, $4, $% | SoFar]);
+quote([$&|R], SoFar) ->
+    quote(R, [$6, $2, $% | SoFar]);
+quote([$=|R], SoFar) ->
+    quote(R, [$D, $3, $% | SoFar]);
+quote([$+|R], SoFar) ->
+    quote(R, [$B, $2, $% | SoFar]);
+quote([$$|R], SoFar) ->
+    quote(R, [$4, $2, $% | SoFar]);
+quote([$,|R], SoFar) ->
+    quote(R, [$C, $2, $% | SoFar]);
+quote([$/|R], SoFar) ->
+    quote(R, [$F, $2, $% | SoFar]);
+quote([H|R], SoFar) ->
+    quote(R, [H | SoFar]);
+quote([], SoFar) ->
+    lists:reverse(SoFar).
+
+unquote([$%, $3, $B | R], SoFar) ->
+    unquote(R, [$; | SoFar]);
+unquote([$%, $2, $0 | R], SoFar) ->
+    unquote(R, [$\s | SoFar]);
+unquote([$%, $3, $F | R], SoFar) ->
+    unquote(R, [$? | SoFar]);
+unquote([$%, $3, $A | R], SoFar) ->
+    unquote(R, [$: | SoFar]);
+unquote([$%, $4, $0 | R], SoFar) ->
+    unquote(R, [$@ | SoFar]);
+unquote([$%, $2, $6 | R], SoFar) ->
+    unquote(R, [$& | SoFar]);
+unquote([$%, $3, $D | R], SoFar) ->
+    unquote(R, [$= | SoFar]);
+unquote([$%, $2, $B | R], SoFar) ->
+    unquote(R, [$+ | SoFar]);
+unquote([$%, $2, $4 | R], SoFar) ->
+    unquote(R, [$$ | SoFar]);
+unquote([$%, $2, $C | R], SoFar) ->
+    unquote(R, [$, | SoFar]);
+unquote([$%, $2, $F | R], SoFar) ->
+    unquote(R, [$/ | SoFar]);
+unquote() ->
