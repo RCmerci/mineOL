@@ -187,7 +187,7 @@ ret_static_file(S, Uri) ->
 
 
 worker(S) ->
-    io:format("worker:~p~n", [self()]),
+    %% io:format("worker:~p~n", [self()]),
     {ok, Packet} = do_recv(S),
     {ok, Uri} = get_uri(Packet),
     try lists:nth(2,binary:split(list_to_binary(Uri), [<<"/">>], [global])) of % /ajax/something
@@ -202,13 +202,52 @@ worker(S) ->
         error:_ ->
             ret_static_file(S, Uri)
     end.
-
 do_recv(S) ->
+    {ok, P} = do_recv(S, []),
+    %% io:format("~p~n", [P]),
+    {ok, list_to_binary(P)}.
+do_recv(S, []) ->
     case gen_tcp:recv(S, 0) of
         {ok, Packet} ->
-            {ok, Packet};
+            try content_length(Packet) of
+                Clen ->
+                    [_H, Body] = binary:split(Packet, [<<"\r\n\r\n">>]),
+                    case size(Body) == Clen of
+                        true ->
+                            {ok, [Packet]};
+                        false ->
+                            do_recv(S, [Packet])
+                    end
+            catch
+                throw:nocontentlen ->
+                    {ok, [Packet]};
+                throw:nocontentlen2 ->
+                    {ok, [Packet]}
+            end;
         {error, closed} ->
             {error, closed};
+        {error, Reason} ->
+            {error, Reason}
+    end;
+do_recv(S, SoFar) ->
+    case gen_tcp:recv(S, 0) of
+        {ok, Packet} ->
+            SoFar2 = list_to_binary(lists:reverse([Packet|SoFar])),
+            try content_length(SoFar2) of
+                Clen ->
+                    [_H, Body] = binary:split(SoFar2),
+                    case size(Body) == Clen of
+                        true ->
+                            {ok, [SoFar2]};
+                        false ->
+                            do_recv(S, [SoFar2])
+                    end
+            catch
+                throw:nocontentlen ->
+                    {ok, [Packet]};
+                throw:nocontentlen2 ->
+                    {ok, [Packet]}
+            end;
         {error, Reason} ->
             {error, Reason}
     end.
@@ -251,3 +290,19 @@ fetch(Uri) ->
 httpresponse(S, e404) ->
     T = #e404{},
     sendback(S, [T#e404.head]).
+
+
+
+content_length(Packet) ->
+    case binary:split(Packet, [<<"Content-Length: ">>])  of
+        [_] ->
+            throw(nocontentlen);
+        [_H, R] ->
+            case binary:split(R, [<<"\r\n">>]) of
+                [_] ->
+                    throw(nocontentlen2);
+                [H, _R] ->
+                    io:format("contentlength:~p~n", [H]),
+                    binary_to_integer(H)
+            end
+    end.

@@ -3,9 +3,10 @@
 // namespace for global
 MINENUMBER = 0;
 MINEHASFOUND = 0;
+MINEHASFOUNDEXACTLY = 0;
 RECTTABLE = [];
-P1 = 0;//随便写个0
-P2 = 0;
+P1 = {};
+P2 = {};
 //-------------------------------
 	var gameFlagType = {
 			'before_start': 'before start',
@@ -50,7 +51,7 @@ P2 = 0;
 			left: '-350px',
 //			top: '800px',
 			'font-size': '-webkit-xxx-large',
-			'font-family': 'monospace',
+			'font-family': 'cursive',
 			position: 'relative'
 		});
 		return function (flag) {
@@ -250,6 +251,12 @@ P2 = 0;
 					status = rectStatus['isMine'];
 					that.changeBackColor(backgroundColors.ismine);
 					MINEHASFOUND++;
+					if(exactStatus == rectStatus.isMine){
+						MINEHASFOUNDEXACTLY++;
+						if(MINEHASFOUNDEXACTLY === MINENUMBER && gameFlag !== gameFlagType.fail){
+							bindGameFlag(gameFlagType.success);
+						}
+					}
 					transferAmongFsms($fsmChoice.ismine);
 					return false;
 				}
@@ -323,6 +330,9 @@ P2 = 0;
 					status = rectStatus['unknown'];
 					that.changeBackColor(backgroundColors.unknown);
 					MINEHASFOUND--;
+					if(exactStatus == rectStatus.isMine){
+						MINEHASFOUNDEXACTLY--;
+					}
 					transferAmongFsms($fsmChoice.unknown);
 					return false;
 				}
@@ -497,6 +507,7 @@ P2 = 0;
 				do_for_start();
 				bindGameFlag(gameFlagType['ing']);
 				MINEHASFOUND = 0;
+				MINEHASFOUNDEXACTLY = 0;
 			},
 			start: function () {
 				do_for_start();
@@ -531,6 +542,7 @@ P2 = 0;
 		$('#restart').click(function () {
 			rects.restart();
 		});
+//		$('#draw-target')[0].oncontextmenu = function(){console.log('qqqqq');return false;};
 //		--------initial global variables-
 		MINENUMBER = MINENUM;
 		RECTTABLE = rects.getRectTable();

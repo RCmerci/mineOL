@@ -161,7 +161,7 @@ handle_ajax(S, State, Id) ->
     end.
 
 handle_ajax(_S, State, Id, {<<"mineHasFound">>, BinValue}) ->
-    io:format("minehasfound:mineHasFound:~p,~p~n", [Id, BinValue]),
+    %% io:format("minehasfound:mineHasFound:~p,~p~n", [Id, BinValue]),
     update_rectTable(State, Id, {2, BinValue}),
     OtherInfo = get_other_info(Id, State),
     format_info(OtherInfo);

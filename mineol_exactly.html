@@ -3,22 +3,30 @@
 <script src="/jq.js"></script>
 <style type="text/css">
     body{
-        font-family: monospace;
+        font-family: cursive;
     }
     #draw-target{
-        width: 480px;
+        width: 450px;
         background-image: url(mineol.png);
         top: 0px;
-        left: 367px;
+        left: 360px;
         position: relative;
     }
     #p1{
+        font-size: x-large;
         top: 50px;
         left: 10px;
+        width: 200px;
         position: relative;
     }
     #p2{
+        font-size: x-large;
         top: 250px;
+        left: 10px;
+        width: 200px;
+        position: relative;
+    }
+    #restart{
         left: 10px;
         position: relative;
     }
@@ -30,10 +38,12 @@
 <body>
 <div id="draw-target"></div>
 <div id="p1">
-    <div class="percent"></div>%
+    Person-1:<div class="person"></div>
+    PCT：<div class="percent"></div>
 </div>
 <div id="p2">
-    <div class="percent"></div>%
+    Person-2:<div class="person"></div>
+    PCT：<div class="percent"></div>
 </div>
 <button id="restart">restart</button>
 </body>
