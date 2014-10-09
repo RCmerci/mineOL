@@ -7,14 +7,15 @@ MINEHASFOUNDEXACTLY = 0;
 RECTTABLE = [];
 P1 = {};
 P2 = {};
+gameFlagType = {
+	'before_start': 'before start',
+	'ing': 'gaming',
+	'fail': 'failed',
+	'success': 'success'
+};
+gameFlag = 0;
 //-------------------------------
-	var gameFlagType = {
-			'before_start': 'before start',
-			'ing': 'gaming',
-			'fail': 'failed',
-			'success': 'success'
-		},
-		backgroundColors = {
+	var backgroundColors = {
 			'unknown': 'rgb(159, 216, 248)',
 			'mousedown': "black",
 			'mouseup': 'rgb(159, 216, 248)',
@@ -279,14 +280,13 @@ P2 = {};
 					for (var i = 0; i < rectNearby.length; ++i) {
 						if (rectNearby[i].statusMatchType() === $statusMatchType['mine-clear']) {
 							$hasMissConfig = true;
-							return;
+							break;
 						}
 					}
 					if($hasMissConfig){
 						for (var j = 0; j < rectNearby.length; ++j) {
-							if ((rectNearby[i].statusMatchType() === $statusMatchType['unknown-mine']) &&
+							if ((rectNearby[j].statusMatchType() === $statusMatchType['unknown-mine']) &&
 								$hasMissConfig) {
-								console.log(rectNearby[i].statusMatchType());
 								$failFlag = true;
 							}
 						}

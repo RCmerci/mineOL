@@ -25,7 +25,7 @@ $(document).ready(function () {
 
 	(function ajaxFunc() {
 		var pct = MINEHASFOUND;
-		if(MINEHASFOUNDEXACTLY === MINENUMBER){
+		if(gameFlag == gameFlagType.success){
 			pct = 100;
 		}
 		$.ajax({
@@ -85,8 +85,8 @@ $(document).ready(function () {
 				catch (err){
 //					console.log(err);
 				}
-				console.log('p1:');
-				console.log(P1);
+//				console.log('p1:');
+//				console.log(P1);
 //				console.log('\np2:');
 //				console.log(P2);
 			},
